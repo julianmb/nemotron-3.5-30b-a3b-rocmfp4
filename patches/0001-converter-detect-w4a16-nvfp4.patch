@@ -1,0 +1,17 @@
+diff --git a/convert_hf_to_gguf.py b/convert_hf_to_gguf.py
+index 421716f..7ef0a17 100755
+--- a/convert_hf_to_gguf.py
++++ b/convert_hf_to_gguf.py
+@@ -793,8 +793,10 @@ class ModelBase:
+ 
+         # Some models use per-tensor quant_algo (e.g. "MIXED_PRECISION" with
+         # per-layer NVFP4/FP8) instead of a single global "NVFP4" value.
++        # NVFP4 tensors can be tagged "W4A16_NVFP4" (ModelOpt), so match the
++        # substring rather than the exact value.
+         if quant_algo != "NVFP4":
+-            if any(v.get("quant_algo") == "NVFP4" for v in quant_layers.values() if isinstance(v, dict)):
++            if any("NVFP4" in str(v.get("quant_algo", "")) for v in quant_layers.values() if isinstance(v, dict)):
+                 quant_algo = "NVFP4"
+ 
+         self._is_nvfp4 = quant_algo == "NVFP4"
+
