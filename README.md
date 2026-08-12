@@ -90,8 +90,10 @@ $ llama-completion -m NVIDIA-Nemotron-3.5-Lightning-30B-A3B-ROCmFP4-STRIX_LEAN.g
 user: What is 2+2?
 assistant: Answer: 4
 
-[ Prompt: 184.0 t/s | Generation: 68.1 t/s ]
+[ Prompt: 184.0 t/s | Generation: 68.1 t/s (cold-start, 7 tokens) ]
 ```
+
+*Standardized `llama-bench` tg128 decode: 85.6 t/s on Vulkan0.*
 
 ---
 
