@@ -33,8 +33,8 @@ All performance metrics were measured on a **Framework AMD Strix Halo** (Ryzen A
 | Preset | BPW | Size | Prompt Eval (pp512) | Decode Speed (tg128) | Recommended Use Case |
 |:-------|:---:|:----:|:------------------:|:-------------------:|:---------------------|
 | 🏆 **`STRIX_LEAN`** | ~4.38 | 15.73 GiB | **1,299.7 t/s** | **85.6 t/s** | **General / Balanced** (Strix Halo K/V recipe + Q5_K token embeddings) |
-| ⚡ **`FAST`** | ~4.25 | 15.66 GiB | **1,199.8 t/s** | **83.4 t/s** | **Maximum Speed** (Single-scale speed layout) |
-| 🛠️ **`COHERENT`** | ~4.70 | 16.74 GiB | **1,188.8 t/s** | **81.0 t/s** | **Agentic / Coding** (Protected token & output embeddings) |
+| ⚡ **`FAST`** | ~4.25 | 15.66 GiB | **1,310.5 t/s** | **86.0 t/s** | **Maximum Speed** (Single-scale speed layout) |
+| 🛠️ **`COHERENT`** | ~4.70 | 16.74 GiB | **1,290.4 t/s** | **81.6 t/s** | **Agentic / Coding** (Protected token & output embeddings) |
 
 > [!TIP]
 > **Vulkan vs ROCm Performance:** On Strix Halo (`gfx1151`), the **Vulkan0** backend outperforms **ROCm0** by **~21%** in prompt processing (1299.7 vs 1075.4 t/s) and **~8%** in decode speed (85.6 vs 79.4 t/s).
