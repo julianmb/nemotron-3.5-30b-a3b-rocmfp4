@@ -133,15 +133,15 @@ build-strix-rocmfp4/bin/llama-perplexity \
 
 ## 5. Verification Scripts (`docs/repro/`)
 
-If you have downloaded both HF checkpoints (`models/hf-nvfp4` and `models/hf-bf16`), you can run the reproduction scripts to verify the NVFP4 math and scaling findings:
+If you want to verify the NVFP4 math and scaling findings, you need both HF checkpoints:
 
 ```bash
-# Verify signed E2M1 fp4 dequantization against BF16 ground truth
-python3 docs/repro/nvfp4_dequant_match.py
+# Download both checkpoints (18 GB + 62 GB)
+hf download nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4 --local-dir models/hf-nvfp4
+hf download nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Base-BF16 --local-dir models/hf-bf16
 
-# Check the 7110x relative error when omitting scale2
-python3 docs/repro/nvfp4_scale2_check.py
-
-# Demonstrate why folding scale2 into E4M3 block scales causes 1.19x relative error
-python3 docs/repro/nvfp4_fold_test.py
+# Then run from the ROCmFPX fork root (where models/ lives):
+python3 /path/to/gh-public/docs/repro/nvfp4_dequant_match.py
+python3 /path/to/gh-public/docs/repro/nvfp4_scale2_check.py
+python3 /path/to/gh-public/docs/repro/nvfp4_fold_test.py
 ```

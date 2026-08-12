@@ -12,7 +12,6 @@ Requires:
 """
 
 import argparse, json, sys, torch
-import numpy as np
 from safetensors import safe_open
 
 def load_tensor(repo_path, name):
