@@ -21,7 +21,7 @@ Parameters: `llama-bench -p 512 -n 128`, `q8_0` KV cache (`-ctk q8_0 -ctv q8_0`)
 | **`STRIX_LEAN`** (`Q4_0_ROCMFP4_STRIX_LEAN`) | 15.72 GiB | **1299.73 ± 6.93 t/s** | **85.62 ± 0.28 t/s** | 1075.44 ± 6.93 t/s | 79.38 ± 0.28 t/s |
 | **`COHERENT`** (`Q4_0_ROCMFP4_COHERENT`) | 16.74 GiB | **1290.38 ± 13.74 t/s** | **81.57 ± 0.27 t/s** | 1302.21 ± 6.94 t/s | 77.75 ± 0.24 t/s |
 
-> **Backend Comparison:** Vulkan0 outperforms ROCm0 on Strix Halo by **~21%** in prompt processing and **~8%** in decode speed.
+> **Backend Comparison:** Vulkan0 outperforms ROCm0 on Strix Halo by **~21%** in prompt processing for `FAST` and `STRIX_LEAN` and **~8%** in decode speed across presets. On `COHERENT`, prompt evaluation is essentially tied (~1290 vs ~1302 t/s, within noise).
 
 ---
 
@@ -34,6 +34,7 @@ Parameters: `llama-completion`, 7-token prompt, greedy sampling (`--temp 0`), Vu
 | **`FAST`** (BF16-derived) | 199.8 t/s | 83.4 t/s |
 | **`STRIX_LEAN`** (BF16-derived) | 184–200 t/s | 76–83 t/s |
 | **`COHERENT`** (BF16-derived) | 188.8 t/s | 81.0 t/s |
+| **Native NVFP4** (with converter patches) | 152.4 t/s | 29.1 t/s (incoherent output) |
 | **CPU Reference** (`-ngl 0`, same model) | 47.4 t/s | 37.2 t/s |
 
 ---

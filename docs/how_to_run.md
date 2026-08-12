@@ -19,9 +19,9 @@ This document provides complete instructions for building the ROCmFPX fork, conv
 git clone https://github.com/charlie12345/ROCmFPX.git
 cd ROCmFPX
 
-# Apply the two converter patches from this repo
-git apply /path/to/patches/0001-converter-detect-w4a16-nvfp4.patch
-git apply /path/to/patches/0002-converter-dequant-output-to-f16.patch
+# Apply the two converter format-patches from this repo (git am or git apply)
+git am /path/to/patches/0001-converter-detect-w4a16-nvfp4.patch
+git am /path/to/patches/0002-converter-dequant-output-to-f16.patch
 
 # Build Strix Halo binaries (gfx1151)
 env JOBS=16 scripts/build-strix-rocmfp4-mtp.sh
