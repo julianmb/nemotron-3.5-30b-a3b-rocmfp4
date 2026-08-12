@@ -70,8 +70,8 @@ All performance metrics were measured on a **Framework AMD Strix Halo** (Ryzen A
 
 1. **Clean BF16 → ROCmFP4 Path**: Produces exceptional quality and speed (**Perplexity 5.9936 ± 0.0358** on `wikitext-2`).
 2. **NVFP4 Path Root Causes**:
-   - **Fix 1 (Detection)**: ModelOpt tags per-layer quantization as `W4A16_NVFP4`. Fixed in `0001-converter-detect-w4a16-nvfp4.patch`.
-   - **Fix 2 (Unloadable GGUFs)**: `output.weight` in ModelOpt NVFP4 emits an unmapped `output.scale` tensor. Fixed in `0002-converter-dequant-output-to-f16.patch` by dequantizing `output.weight` to F16.
+   - **Fix 1 (Detection)**: ModelOpt tags per-layer quantization as `W4A16_NVFP4`. Backported in `0001-converter-detect-w4a16-nvfp4.patch`.
+   - **Fix 2 (Unloadable GGUFs)**: `output.weight` in ModelOpt NVFP4 emits an unmapped `output.scale` tensor. Workaround provided in `0002-converter-dequant-output-to-f16.patch` (upstream llama.cpp master addresses this natively via runtime `output_s` support).
    - **Requantization Defect**: Requantizing NVFP4 → ROCmFP4 produces garbage because `dequantize_row_nvfp4` in C++ ignores ModelOpt's companion `scale2` factor (`~1.4e-4`), causing a **7,110× weight scaling error**.
 3. **Context Length Override**: GGUF `context_length` is corrected to **262,144** (256K tokens) via `--override-kv nemotron_h_moe.context_length=int:262144`.
 
