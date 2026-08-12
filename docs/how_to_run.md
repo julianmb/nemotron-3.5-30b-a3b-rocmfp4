@@ -117,7 +117,7 @@ build-strix-rocmfp4/bin/llama-cli \
 ### Speed Benchmark (`llama-bench`)
 ```bash
 build-strix-rocmfp4/bin/llama-bench \
-  -m models/gguf/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-ROCmFP4-STRIX_LEAN.gguf \
+  -m NVIDIA-Nemotron-3.5-Lightning-30B-A3B-ROCmFP4-STRIX_LEAN.gguf \
   -p 512 -n 128 -t 16 -dev Vulkan0 -ngl 999 -fa 1 -ctk q8_0 -ctv q8_0
 ```
 
@@ -125,7 +125,7 @@ build-strix-rocmfp4/bin/llama-bench \
 ```bash
 scripts/get-wikitext-2.sh
 build-strix-rocmfp4/bin/llama-perplexity \
-  -m models/gguf/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-ROCmFP4-STRIX_LEAN.gguf \
+  -m NVIDIA-Nemotron-3.5-Lightning-30B-A3B-ROCmFP4-STRIX_LEAN.gguf \
   -f wikitext-2-raw/wiki.test.raw -c 512 -b 512 -t 16 -dev Vulkan0 -ngl 999 -fa on -ctk q8_0 -ctv q8_0
 ```
 
