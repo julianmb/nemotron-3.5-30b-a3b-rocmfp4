@@ -17,12 +17,12 @@ Converter fixes, empirical findings, and Strix Halo benchmarks for quantizing [N
 
 ## 📌 Table of Contents
 
-- [Model Variants & Benchmarks](#-model-variants--benchmarks)
-- [Repository Structure](#-what-this-repo-contains)
-- [Key Engineering Findings](#-key-engineering-findings)
-- [Sample Output](#-sample-generation)
-- [Quick Start](#-quick-start)
-- [Provenance & License](#-provenance--license)
+- [Model Variants & Benchmarks](#model-variants--benchmarks)
+- [Repository Structure](#what-this-repo-contains)
+- [Key Engineering Findings](#key-engineering-findings)
+- [Sample Output](#sample-generation)
+- [Quick Start](#quick-start)
+- [Provenance & License](#provenance--license)
 
 ---
 
@@ -30,7 +30,7 @@ Converter fixes, empirical findings, and Strix Halo benchmarks for quantizing [N
 
 All performance metrics were measured on a **Framework AMD Strix Halo** (Ryzen AI Max 395+, `gfx1151`, 128 GB Unified RAM, ROCm 7.2.3) using full GPU offload (`-ngl 999`), FlashAttention enabled (`-fa on`), and `q8_0` KV cache:
 
-| Preset | BPW | Size | Prompt Eval (pp512) | Decode Speed (tg128) | Recommended Use Case |
+| Preset | BPW | Size | Vulkan0 Prompt (pp512) | Vulkan0 Decode (tg128) | Recommended Use Case |
 |:-------|:---:|:----:|:------------------:|:-------------------:|:---------------------|
 | 🏆 **`STRIX_LEAN`** | ~4.38 | 15.73 GiB | **1,299.7 t/s** | **85.6 t/s** | **General / Balanced** (Strix Halo K/V recipe + Q5_K token embeddings) |
 | ⚡ **`FAST`** | ~4.25 | 15.66 GiB | **1,310.5 t/s** | **86.0 t/s** | **Maximum Speed** (Single-scale speed layout) |
