@@ -4,50 +4,60 @@ Converter fixes, measurements, and build/run notes for quantizing
 [NVIDIA Nemotron 3.5 Lightning 30B-A3B Base](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Base-BF16)
 to the experimental **ROCmFP4** GGUF family on AMD (Strix Halo / `gfx1151`).
 
-Pre-built GGUF files: **[julianmb/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-ROCmFP4-GGUF](https://huggingface.co/julianmb/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-ROCmFP4-GGUF)** on the Hugging Face Hub.
+Pre-built GGUF files: **[julianmb/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-ROCmFP4-GGUF](https://huggingface.co/julianmb/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-ROCmFP4-GGUF)** on Hugging Face.
+
+---
+
+## Model Variants & Performance Summary
+
+All benchmarks run on **Framework AMD Strix Halo** (Ryzen AI Max, `gfx1151`, 128 GB unified memory, ROCm 7.2.3) using Vulkan0:
+
+| Preset | BPW | Size | Prompt Eval (pp512) | Decode Speed (tg128) | Recommended Use Case |
+|:-------|----:|-----:|--------------------:|---------------------:|:---------------------|
+| **`STRIX_LEAN`** | ~4.38 | 15.73 GiB | 1299.7 t/s | 85.6 t/s | **General / Balanced** (Strix Halo K/V recipe + Q5_K token embeddings) |
+| **`FAST`** | ~4.25 | 15.66 GiB | 199.8 t/s | 83.4 t/s | **Maximum Speed** (Single-scale speed layout) |
+| **`COHERENT`** | ~4.70 | 16.74 GiB | 188.8 t/s | 81.0 t/s | **Agentic / Coding** (Protected token & output embeddings) |
+
+*Note: Token embeddings for 2688 dimensions fall back from `Q5_K` / `Q6_K` to `Q5_1` / `Q8_0` because 2688 is not divisible by 256.*
+
+---
 
 ## What this repo contains
 
-- `patches/` — two minimal fixes to the ROCmFPX fork's `convert_hf_to_gguf.py`
-  that were needed to convert this model's NVFP4 checkpoint and to produce a
-  loadable GGUF.
-- `docs/benchmarks.md` — measured decode/prompt speeds (Vulkan vs ROCm) and
-  perplexity.
-- `docs/nvfp4-findings.md` — why the NVFP4 → ROCmFP4 remap path was **dropped**
-  for this model (two defects found; one fixed, one needs a core-quantizer change).
-- `docs/how_to_run.md` — build + run instructions.
-- `AI_CHANGES.md` — change log of the AI-assisted work (per the fork's policy).
+- `patches/` — two `git format-patch` fixes against commit `00d54526e24e3aba4c76474e3147cbf9c7cc034c` for `convert_hf_to_gguf.py`:
+  - `0001-converter-detect-w4a16-nvfp4.patch`: Fixes detection for `W4A16_NVFP4` ModelOpt tags.
+  - `0002-converter-dequant-output-to-f16.patch`: Dequantizes `output.weight` to F16 (prevents unloadable `output.scale`).
+- `docs/benchmarks.md` — detailed speed benchmarks (Vulkan vs ROCm) and perplexity results.
+- `docs/nvfp4-findings.md` — analysis of native NVFP4 vs ROCmFP4 remap.
+- `docs/repro/` — self-contained Python scripts (`nvfp4_dequant_match.py`, `nvfp4_scale2_check.py`, `nvfp4_fold_test.py`) verifying the math.
+- `docs/how_to_run.md` — step-by-step build, conversion, and quantization commands.
+- `AI_CHANGES.md` — change log of AI-assisted work per project policy.
 
-## tl;dr conclusions
+---
 
-- The **clean BF16 → ROCmFP4** path works and is the deliverable. The resulting
-  `Q4_0_ROCMFP4_STRIX_LEAN` GGUF scores **PPL 5.9936 ± 0.0358** on wikitext-2
-  and runs fully on GPU via unified memory.
-- The **NVFP4 → ROCmFP4 remap** path silently produces **garbage** for this
-  model because the quantizer's NVFP4 dequant ignores ModelOpt's companion
-  `scale2`/`input_scale` factors (this model: `scale2 ≈ 1.4e-4` → weights
-  ~7110× off). The README's 9B example only worked because its factors were ≈ 1.0.
-- On this Strix Halo box, **Vulkan beats ROCm**: pp512 1299.7 vs 1075.4 t/s,
-  tg128 85.6 vs 79.4 t/s.
-- The model's **MTP/NextN head is not included** (converter skips `mtp.*` for
-  MoE), so no self-speculative decode here.
-- GGUF advertises **262,144** context (the real limit), overriding the converter's
-  hardcoded 1M for hybrid mamba/attention archs.
+## Key Conclusions
 
-## Reproducing
+1. **Clean BF16 → ROCmFP4 Path**: Excellent quality and speed (**PPL 5.9936 ± 0.0358** on wikitext-2).
+2. **NVFP4 Path Findings**:
+   - **Native NVFP4** loads and runs without crashing after applying our patches, but gets PPL **109.79** because runtime kernels/graph do not integrate ModelOpt's companion `scale2` factor (`~1.4e-4`).
+   - **NVFP4 → ROCmFP4 Remap** fails because the quantizer's `dequantize_row_nvfp4` ignores `scale2`, causing a 7110× error on expert weights.
+3. **Vulkan > ROCm on Strix Halo**: Vulkan0 outperforms ROCm0 by ~21% on prompt evaluation (1299.7 vs 1075.4 t/s) and ~8% on decode (85.6 vs 79.4 t/s).
+4. **Context Length**: Fixed `context_length = 262144` (256K) via `--override-kv nemotron_h_moe.context_length=int:262144`.
 
-See `docs/how_to_run.md`. Everything was built with the
-[ROCmFPX fork](https://github.com/charlie12345/ROCmFPX) (`b209-00d5452`) on a
-Framework AMD Strix Halo (Ryzen AI Max, `gfx1151`, 128 GB unified RAM,
-ROCm 7.2.3).
+---
 
-## License
+## Provenance & AI Disclosure
 
-The converter patches are MIT (llama.cpp lineage). The model weights are
-NVIDIA's under [OpenMDW-1.1](https://openmdw.ai/license/1-1/). See `LICENSE`.
+- **AI-Assisted Work**: The converter fixes and documentation were developed with AI assistance in accordance with [AGENTS.md](AI_CHANGES.md).
+- **Upstream Policy**: Per project guidelines, these patches are provided as standalone patches for manual application (`git am`) rather than as automated pull requests.
 
-## Credits
+## Base Commit & Pinning
 
-- NVIDIA — model weights and architecture
-- charlie12345 — ROCmFPX / ROCmFP4 quantization + kernels
-- julianmb — this conversion work and documentation
+- **Upstream Fork**: [charlie12345/ROCmFPX](https://github.com/charlie12345/ROCmFPX)
+- **Base Commit**: `00d54526e24e3aba4c76474e3147cbf9c7cc034c` (Branch `main`, 2026-08-09)
+
+## License & Credits
+
+- Model Weights: NVIDIA ([OpenMDW-1.1 License](https://openmdw.ai/license/1-1/))
+- Code & Patches: MIT License (llama.cpp lineage)
+- Quantization & Benchmarks: **julianmb**

@@ -1,5 +1,21 @@
+From bb19c833352491fdc64355fb8eb6f0acc837e799 Mon Sep 17 00:00:00 2001
+From: julianmb <julianmb@users.noreply.github.com>
+Date: Wed, 12 Aug 2026 14:36:51 +1000
+Subject: [PATCH 2/2] convert_hf_to_gguf: dequantize NVFP4 output.weight to F16
+
+When a ModelOpt NVFP4 checkpoint quantizes output.weight, repacking it
+emits output.scale (scale2 factor). llama.cpp has no output-scale tensor
+counterpart in the runtime mapping, causing done_getting_tensors to abort
+with 'wrong number of tensors; expected N, got N-1'.
+
+Dequantize output.weight to F16 in-place using signed-E2M1 fp4 lookup table
+(low-nibble first, per-16 E4M3 scale, times scale2) so no output.scale is emitted.
+---
+ convert_hf_to_gguf.py | 41 ++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 40 insertions(+), 1 deletion(-)
+
 diff --git a/convert_hf_to_gguf.py b/convert_hf_to_gguf.py
-index 421716f..7ef0a17 100755
+index 283e305..7ef0a17 100755
 --- a/convert_hf_to_gguf.py
 +++ b/convert_hf_to_gguf.py
 @@ -666,6 +666,36 @@ class ModelBase:
@@ -39,7 +55,7 @@ index 421716f..7ef0a17 100755
      def _repack_nvfp4(self, name: str, weight: Tensor, scale: Tensor, scale2: Tensor, input_scale: Tensor):
          new_name = self.map_tensor_name(name)
  
-@@ -737,7 +737,16 @@ class ModelBase:
+@@ -737,7 +767,16 @@ class ModelBase:
                  if n_experts > 0 and len(expert_blocks[key]) >= n_experts:
                      self._flush_nvfp4_experts(key, expert_blocks, expert_scales, expert_input_scales, expert_shapes, bid, proj_type)
              else:
@@ -57,3 +73,6 @@ index 421716f..7ef0a17 100755
  
          # Flush any remaining experts (fallback if n_experts was unknown)
          for bid, proj_type in list(expert_blocks.keys()):
+-- 
+2.43.0
+

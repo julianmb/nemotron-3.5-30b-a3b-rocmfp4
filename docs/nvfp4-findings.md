@@ -1,60 +1,54 @@
-# NVFP4 → ROCmFP4: findings and why we dropped it
+# NVFP4 Findings & Analysis
 
-We originally intended to also remap NVIDIA's pre-quantized
-[NVFP4 checkpoint](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4)
-onto the ROCmFP4 kernel path. Two independent defects surfaced; the resulting
-artifact was dropped in favor of the clean BF16 → ROCmFP4 path.
+We evaluated both **Native NVFP4** inference and the **NVFP4 → ROCmFP4 Remap** path for NVIDIA's pre-quantized [Nemotron 3.5 Lightning 30B-A3B NVFP4](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4) checkpoint.
 
-## Defect 1 — unloadable NVFP4 GGUF when `output.weight` is NVFP4 (FIXED)
+---
 
-**Symptom:** converted NVFP4 GGUF (and its ROCmFP4 remap) failed to load:
-`done_getting_tensors: wrong number of tensors; expected 494, got 493`.
+## Defect 1 — Unloadable GGUF due to `output.scale` (FIXED)
 
-**Root cause:** every tensor in the GGUF must have a counterpart in the runtime
-tensor mapping. The converter's NVFP4 path writes a per-tensor `output.scale`
-(a "scale2" factor) for the packed `output.weight`. llama.cpp has **no
-output-scale tensor** (`output_s`), so one file tensor goes unmapped and the
-strict count check aborts. The 92 per-expert `ffn_*_exps/shexp.scale` tensors
-are fine — the runtime auto-creates those (`llama-model.cpp`).
+**Symptom:** Converted NVFP4 GGUF files failed to load in llama.cpp:
+```text
+error loading model: done_getting_tensors: wrong number of tensors; expected 494, got 493
+```
 
-**Fix** (`patches/0002-converter-dequant-output-to-f16.patch`): dequantize the
-GGUF output tensor to F16 instead of packing it as NVFP4, so no `output.scale`
-is emitted. The dequant was verified against the BF16 checkpoint's
-`lm_head.weight`: signed-E2M1 fp4, low-nibble-first, one E4M3 scale per 16-group,
-× scale2 × input_scale, matching to fp4 noise (rms 0.0023).
+**Root Cause:** Every tensor in a GGUF file must map to a tensor created in `llama-model.cpp`. ModelOpt's NVFP4 export packs `output.weight` and writes a separate `output.scale` ("scale2") factor tensor. Because llama.cpp has no `output_s` scale tensor mapping for `output.weight`, one tensor goes unmapped, failing the `done_getting_tensors` count check.
 
-Why F16 and not BF16: the dequantized values only carry fp4 precision, and the
-environment's numpy lacks bfloat16 support.
+**Fix (`patches/0002-converter-dequant-output-to-f16.patch`):**
+In `convert_hf_to_gguf.py`, we detect when `output.weight` is NVFP4-quantized and dequantize it in-place to F16 (signed E2M1 lookup table, low nibble first, per-16 group scale, times `scale2`). This eliminates `output.scale` while preserving exact weights. Verified against the BF16 ground truth in `docs/repro/nvfp4_dequant_match.py` (RMS error = **0.00230**).
 
-## Defect 2 — quantizer ignores NVFP4 companion scales (NOT FIXED)
+*Note: F16 is used instead of BF16 because numpy 1.26 lacks native bfloat16 array support.*
 
-**Symptom:** after fixing defect 1, the NVFP4 → ROCmFP4 artifact loaded but
-produced **garbage** ("No Yes No Yes" vs the correct "Answer: 4").
+---
 
-**Root cause:** `dequantize_row_nvfp4` (`ggml-quants.c`) applies **only the block
-scales**; `llama_tensor_dequantize_impl` (`llama-quant.cpp`) has no access to
-the NVFP4 companion `.scale` / `.input_scale` tensors. For ModelOpt checkpoints
-with non-trivial per-tensor/per-expert `scale2`/`input_scale`, the requantized
-weights are wrong by that factor.
+## Defect 2 — Ignored Companion `scale2` Factor in Runtime & Quantizer
 
-Measured on one expert: **without** `scale2` → relative error **7110×** vs the
-BF16 source; **with** `scale2` → 0.10 (~fp4 noise). This model's `scale2 ≈
-1.4e-4`.
+**Symptom:**
+- **NVFP4 → ROCmFP4 Remap:** The remapped GGUF loads, but generates gibberish ("No Yes No Yes").
+- **Native NVFP4:** The GGUF loads, but scores **PPL 109.7910 ± 0.96827** on wikitext-2 (vs **5.9936** for BF16-derived ROCmFP4).
 
-The fork's README claims NVFP4 → ROCmFP4 is the "closest-matching conversion";
-the 9B example it cites worked because that model's factors are ≈ 1.0 (and its
-`output.weight` stays high-precision, which is why defect 1 never triggered).
+**Root Cause:**
+`dequantize_row_nvfp4` (`ggml-quants.c`) applies **only the per-subblock E4M3 scales**. It does not apply ModelOpt's companion `.scale` (`scale2`) or `.input_scale` tensors.
+For expert weights in this model, `scale2 ≈ 0.0001386`.
 
-**Why it wasn't fixed here:** a correct fix requires the quantizer to look up and
-apply each NVFP4 tensor's companion scales (per-expert broadcast over the merged
-expert dim) during dequant and then drop them from the output — a change to core
-C++ quantization behavior. Per this project's AI-use policy, that is a
-human-owned change. We also tested folding the factors into the block scales in
-the converter; it was rejected because `scale2 = 1.4e-4` pushes UE4M3 block
-scales into denormal range (relative error 1.19 vs 0.10 exact).
+Empirical verification (`docs/repro/nvfp4_scale2_check.py`):
+- **Without `scale2`**: Relative error vs BF16 ground truth = **7110.49×** (garbage)
+- **With `scale2`**: Relative error vs BF16 ground truth = **0.1007** (~10%, expected FP4 quantization noise)
 
-## Decision
+**Why folding `scale2` into block scales in the converter fails:**
+We tested folding `scale2` into the E4M3 block scales during conversion (`docs/repro/nvfp4_fold_test.py`). Because `scale2 = 1.38e-4`, folding it pushes the E4M3 block scales into the denormal range, resulting in a **1.19× relative error** (~120% error, 12× worse than exact dequantization) due to 3-bit denormal mantissa precision loss.
 
-Keep the **BF16 → ROCmFP4** artifacts only. They are correct, validated, and
-cleanly reproducible. The NVFP4 remap is documented here so the next person does
-not repeat the investigation.
+---
+
+## Summary Table
+
+| Path | Load Status | PPL (wikitext-2) | Status |
+|:-----|:------------|:-----------------|:-------|
+| **BF16 → ROCmFP4 STRIX_LEAN** | Loads OK | **5.9936 ± 0.0358** | **Promoted & Delivered** |
+| **Native NVFP4 (with Patch 1 & 2)** | Loads OK | 109.7910 ± 0.9683 | Incoherent (Missing `scale2` in kernels) |
+| **NVFP4 → ROCmFP4 Remap** | Loads OK | Incoherent | Incoherent (Missing `scale2` in quantizer) |
+
+---
+
+## Conclusion
+
+The **clean BF16 → ROCmFP4 path** is the only viable conversion path for ModelOpt NVFP4 checkpoints with non-trivial `scale2` factors.

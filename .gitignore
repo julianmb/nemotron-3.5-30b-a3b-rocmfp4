@@ -1,0 +1,10 @@
+# Ignore log and temporary files
+*.log
+*.tmp
+*.swp
+.DS_Store
+__pycache__/
+*.pyc
+build/
+.venv/
+EOF
